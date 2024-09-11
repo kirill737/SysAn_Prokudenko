@@ -18,13 +18,12 @@ def parseJson(fileName, graph):
         print("Json file is not exist.")
     parseGraph(graph=graph, node=data)
 
+if __name__ == "__main__":
+    graph = {}
+    fileName = './lab1/test.json'
+    parseJson(fileName=fileName, graph=graph)
 
-
-graph = {}
-fileName = './lab1/test.json'
-parseJson(fileName=fileName, graph=graph)
-
-for key, value in graph.items():
-    print(f"{key}: {value}")
+    for key, value in graph.items():
+        print(f"{key}: {value}")
 
 
