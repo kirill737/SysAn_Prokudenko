@@ -95,6 +95,7 @@ def calcEnthropy(graph):
     return E
 # graph = parseJson(filename)
 # print(graph.items()[0])
-graph = parseJson(filename)
-enthropy = calcEnthropy(graph)
-print(f"Энтропия: {round(enthropy, 3)}")
+def main():
+    graph = parseJson(filename)
+    enthropy = calcEnthropy(graph)
+    print(f"Энтропия: {round(enthropy, 3)}")

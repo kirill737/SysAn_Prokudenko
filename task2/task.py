@@ -74,6 +74,8 @@ def getTable(graph):
 
     for i in range(len(graph)):
         print(f"{i + 1}: r1: {calcR1(graph, str(i + 1))} r2: {calcR2(graph, str(i + 1))} r3: {calcR3(graph, str(i + 1))} r4: {calcR4(graph, str(i + 1))} r5: {calcR5(graph, str(i + 1))}")
-filename = './task1/test2.json'
 
-getTable(parseJson(filename))
+def main():
+    filename = './task1/test2.json'
+
+    getTable(parseJson(filename))
