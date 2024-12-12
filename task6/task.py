@@ -1,91 +1,125 @@
 import json
 
-def membership(value, points):
-    """
-    Рассчитывает степень принадлежности
-    """
-    for i in range(len(points) - 1):
-        x1, y1 = points[i]
-        x2, y2 = points[i + 1]
-        if x1 <= value <= x2:
-            # Линейная интерполяция между точками
-            print(value, points, y1 + (value - x1) * (y2 - y1) / (x2 - x1))
-            return y1 + (value - x1) * (y2 - y1) / (x2 - x1)
-        
+# Вычисляет степень уверенности
+def calc_membership(value, membership_func):
+    for i in range(len(membership_func) - 1):
+        x0, y0 = membership_func[i]
+        x1, y1 = membership_func[i + 1]
+        if x0 <= value <= x1:
+            return y0 if y0 == y1 else y0 + (y1 - y0) * (value - x0) / (x1 - x0)
     return 0
 
-def defuzzify(control_values):
-    """
-    Центроидный метод дефаззификации.
-    """
-    numerator = 0
-    denominator = 0
-    for value, degree in control_values:
-        numerator += value * degree
-        denominator += degree
+# Выполняет фаззификацию
+def fuzzify(input_val, fuzzy_sets):
+    membership_vals = {}
+    for label, points in fuzzy_sets.items():
+        membership_vals[label] = round(calc_membership(input_val, points), 2)
+    print(f"Фаззификация значения {input_val}: {membership_vals}\n")
+    return membership_vals
+
+# Сопоставляет входные термы выходным с учётом переходной таблицы
+def map_to_output(input_membership, transition_rules):
+    output_membership = {}
+    for input_label, input_mu in input_membership.items():
+        output_label = transition_rules[input_label]
+        if output_label in output_membership:
+            output_membership[output_label] = max(output_membership[output_label], input_mu)
+        else:
+            output_membership[output_label] = input_mu
+    print(f"Сопоставление на выходное множество: {output_membership}\n")
+    return output_membership
+
+# Объединяет функции принадлежности выходных термов
+def combine_outputs(output_membership, output_sets):
+    combined_points = []
+    for label, mu in output_membership.items():
+        points = output_sets[label]
+        for x, y in points:
+            combined_points.append((x, min(mu, y)))
+    return combined_points
+
+# Выполняет дефаззификацию методом центра тяжести
+def mamdani_defuzzify(points):
+    aggregated = {}
+    for x, y in points:
+        if x in aggregated:
+            aggregated[x] = max(aggregated[x], y)
+        else:
+            aggregated[x] = y
+    numerator = sum(x * y for x, y in aggregated.items())
+    denominator = sum(y for y in aggregated.values())
     return numerator / denominator if denominator != 0 else 0
 
-def main(temperature_json, heating_json, rules_json, current_temperature):
-    # Парсим входные данные
-    temperature_sets = json.loads(temperature_json)["температура"]
-    heating_sets = json.loads(heating_json)["температура"]
-    rules = json.loads(rules_json)
-    
-    # Вычисляем степень принадлежности текущей температуры каждому терму
-    temperature_degrees = {}
-    for term in temperature_sets:
-        term_id = term["id"]
-        term_points = term["points"]
-        temperature_degrees[term_id] = membership(current_temperature, term_points)
-    
-    # Применяем правила для вычисления выходных значений
-    control_values = []
-    for rule in rules:
-        temperature_term, heating_term = rule
-        degree = temperature_degrees.get(temperature_term, 0)
-        for heating in heating_sets:
-            if heating["id"] == heating_term:
-                for i in range(len(heating["points"]) - 1):
-                    x1, y1 = heating["points"][i]
-                    x2, y2 = heating["points"][i + 1]
-                    if degree > 0:
-                        # Максимальное пересечение
-                        control_values.append((x1, min(y1, degree)))
-                        control_values.append((x2, min(y2, degree)))
-    
+# Основной алгоритм управления с использованием метода Мамдани
+def main(temp_data: str, reg_data: str, rules_data: str, input_temp: float):
+    temp_sets = json.loads(temp_data)
+    reg_sets = json.loads(reg_data)
+    rules_map = json.loads(rules_data)
+
+    # Фаззификация
+    temp_membership = fuzzify(input_temp, temp_sets)
+    # Сопоставление термов
+    reg_membership = map_to_output(temp_membership, rules_map)
+    # Агрегация выходных функций принадлежности
+    combined = combine_outputs(reg_membership, reg_sets)
     # Дефаззификация
-    optimal_control = defuzzify(control_values)
-    print(optimal_control)
-    return optimal_control
+    final_value = mamdani_defuzzify(combined)
+    print(f"Итоговое значение после дефаззификации: {final_value}\n")
+    return final_value
 
-temperature_json = '''
-{
-  "температура": [
-      {"id": "холодно", "points": [[0,1],[18,1],[22,0],[50,0]]},
-      {"id": "комфортно", "points": [[18,0],[22,1],[24,1],[26,0]]},
-      {"id": "жарко", "points": [[0,0],[24,0],[26,1],[50,1]]}
-  ]
-}
-'''
+temperatures = """{
+    "холодно": [
+        [0, 1],
+        [16, 1],
+        [20, 0],
+        [50, 0]
+    ],
+    "комфортно": [
+        [16, 0],
+        [20, 1],
+        [22, 1],
+        [26, 0]
+    ],
+    "жарко": [
+        [0, 0],
+        [22, 0],
+        [26, 1],
+        [50, 1]
+    ]
+}"""
 
-heating_json = '''
-{
-  "температура": [
-      {"id": "слабый", "points": [[0,0],[0,1],[5,1],[8,0]]},
-      {"id": "умеренный", "points": [[5,0],[8,1],[13,1],[16,0]]},
-      {"id": "интенсивный", "points": [[13,0],[18,1],[23,1],[26,0]]}
-  ]
-}
-'''
+regulator = """{
+    "слабо": [
+        [0, 1],
+        [6, 1],
+        [10, 0],
+        [20, 0]
+    ],
+    "умеренно": [
+        [6, 0],
+        [10, 1],
+        [12, 1],
+        [16, 0]
+    ],
+    "интенсивно": [
+        [0, 0],
+        [12, 0],
+        [16, 1],
+        [20, 1]
+    ]
+}"""
 
-rules_json = '''
-[
-    ["холодно", "интенсивный"],
-    ["комфортно", "умеренный"],
-    ["жарко", "слабый"]
-]
-'''
+transition = """{
+    "холодно": "интенсивно",
+    "комфортно": "умеренно",
+    "жарко": "слабо"
+}"""
 
-current_temperature = 23.0
+print("--Тест с холодной температурой--")
+main(temperatures, regulator, transition, 10)
 
-main(temperature_json, heating_json, rules_json, current_temperature)
+print("--Тест с умеренной температурой--")
+main(temperatures, regulator, transition, 20)
+
+print("--Тест с жаркой температурой--")
+main(temperatures, regulator, transition, 30)
